@@ -1,0 +1,18 @@
+﻿using System;using System.Linq;using System.Collections.Generic;using ListeningStudio;
+class GenericGroupingTests {
+ static int checks=0;static void Check(bool ok,string name){if(!ok)throw new Exception("FAIL: "+name);Console.WriteLine("PASS: "+name);checks++;}
+ static Cue C(string id,double start,string text){return new Cue{id=id,start=start,end=start+2,text=text};}
+ static bool InPrompts(Lesson p,string id){return p.groups.Where(g=>g.title=="考试提示语").SelectMany(g=>g.takes).Any(t=>t.cues.Contains(id));}
+ static bool InPending(Lesson p,string id){return p.groups.Where(g=>g.title.Contains("待确认材料")).SelectMany(g=>g.takes).Any(t=>t.cues.Contains(id));}
+ static Lesson L(params Cue[] cues){return new Lesson{audio="fixture.mp3",duration=999,cues=cues.ToList()};}
+ static void Main(){try{
+ string[] dialogue={"We walked along 长江 yesterday and enjoyed the view.","这是一段中文访谈内容，并不是考试命令。","She asked me to listen to the music in her car.","Good idea 听下面录音，回答第十一小题。","Yes 听下面录音，回答第十一小题。","I need twenty seconds to read this message.","You will hear me sing at the concert.","You have twenty seconds to read my message.","我想听下面这段录音，因为里面有我朋友的声音。"};
+ foreach(var text in dialogue)Check(!CueClassifier.Instruction(text),"dialogue or mixed content is never classified merely by Chinese count: "+text);
+ string[] prompts={"听下面一段对话，回答第十一至第十三小题。","现在你有十五秒钟的时间阅读这三个小题。","第一节到此结束。","从题中所给的 A B C 三个选项中选出最佳选项。","Listen to the following conversation and answer questions 31 to 33.","You will hear a short passage twice."};foreach(var text in prompts)Check(CueClassifier.Instruction(text),"recognize explicit exam instruction: "+text);
+ foreach(int offset in new[]{0,173,421}){var mixed=C("mixed",offset+15,"Good idea 听下面录音，回答第十二小题。");var following=C("after",offset+19,"The train leaves from a different platform tomorrow.");var p=L(C("intro",offset,"听下面一段对话，回答第十一小题。"),C("body",offset+5,"I would prefer the earlier train this evening."),mixed,following,C("next",offset+25,"听下面一段对话，回答第十三小题。"),C("nextbody",offset+30,"Our guide will meet everyone outside the station."));Data.GroupCues(p);Data.Validate(p);Check(InPending(p,"mixed")&&!InPrompts(p,"mixed"),"unsplittable mixed short reply remains visible for review at offset "+offset);Check(InPending(p,"after"),"uncertain question boundary cannot silently absorb next dialogue at offset "+offset);Check(!InPrompts(p,"body")&&!InPrompts(p,"nextbody"),"ordinary dialogue remains outside instructions at offset "+offset);}
+ var before=L(C("warmup",0,"My ticket is for the afternoon performance."),C("prompt",10,"听下面一段独白，回答第十六小题。"),C("body",15,"The theatre opened its doors last autumn."));Data.GroupCues(before);Check(InPending(before,"warmup")&&!InPrompts(before,"warmup"),"unassigned English is pending material rather than a catch-all prompt");
+ var english=L(C("prompt",50,"Listen to conversation 4 and answer questions 31 to 33."),C("body",55,"The new library will open next Saturday."));Data.GroupCues(english);Check(english.groups[0].title.Contains("31—33"),"English numbering uses question numbers rather than conversation number");
+ var onlyPrompts=L(C("p",0,"现在你有十秒钟的时间阅读下一小题。"));Data.GroupCues(onlyPrompts);Data.Validate(onlyPrompts);Check(onlyPrompts.groups.Count==1&&InPrompts(onlyPrompts,"p"),"a prompt-only file is not fabricated into a dialogue material");
+ Console.WriteLine("TOTAL PASS="+checks);
+ }catch(Exception e){Console.WriteLine(e.Message);Environment.ExitCode=1;}}
+}

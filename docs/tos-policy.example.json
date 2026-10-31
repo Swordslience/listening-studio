@@ -1,0 +1,15 @@
+﻿{
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "tos:PutObject",
+        "tos:GetObject",
+        "tos:DeleteObject"
+      ],
+      "Resource": [
+        "trn:tos:::YOUR_BUCKET/listening-studio/*"
+      ]
+    }
+  ]
+}
